@@ -2756,7 +2756,7 @@ public class FirebasePlugin extends CordovaPlugin {
             channel.setLockscreenVisibility(visibility);
 
             // Badge
-            boolean badge = options.optBoolean("badge", true);
+            boolean badge = options.optBoolean("badge", false);
             Log.d(TAG, "Channel " + id + " - badge=" + badge);
             channel.setShowBadge(badge);
 
