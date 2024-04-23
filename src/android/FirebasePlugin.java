@@ -2786,7 +2786,7 @@ public class FirebasePlugin extends CordovaPlugin {
                     channel.setSound(soundUri, audioAttributes);
                     Log.d(TAG, "Channel " + id + " - sound=" + sound);
                 } else {
-                    Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/my_sound");
+                    Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/notification_sound");
                     channel.setSound(soundUri, audioAttributes);
                     Log.d(TAG, "Channel " + id + " - sound=default (Klender ringtone)");
                 }

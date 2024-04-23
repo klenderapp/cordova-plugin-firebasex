@@ -57,7 +57,7 @@
 			<meta-data android:name="google_analytics_adid_collection_enabled" android:value="true" />
 		</config-file>
 		<resource-file src="src/android/cordova-plugin-firebase-strings.xml" target="res/values/cordova-plugin-firebase-strings.xml" />
-		<resource-file src="src/android/my_sound.mp3" target="res/raw/my_sound.mp3" />
+		<resource-file src="src/android/notification_sound.mp3" target="res/raw/notification_sound.mp3" />
 		<source-file src="src/android/FirebasePlugin.java" target-dir="src/org/apache/cordova/firebase" />
 		<source-file src="src/android/OnNotificationOpenReceiver.java" target-dir="src/org/apache/cordova/firebase" />
 		<source-file src="src/android/OnNotificationReceiverActivity.java" target-dir="src/org/apache/cordova/firebase" />
