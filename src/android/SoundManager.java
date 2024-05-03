@@ -52,7 +52,7 @@ public class SoundManager {
             // Get the resource identifier dynamically
             int resourceId = context.getResources().getIdentifier("notification_sound", "raw", context.getPackageName());
             if (resourceId == 0) {
-                throw new RuntimeException("Resource not found: " + resourceName);
+                throw new RuntimeException("Resource not found");
             }
             InputStream inputStream = context.getResources().openRawResource(resourceId);
             OutputStream outputStream = context.getContentResolver().openOutputStream(newUri);
