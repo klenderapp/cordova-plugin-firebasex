@@ -172,6 +172,8 @@ public class FirebasePlugin extends CordovaPlugin {
     public static String defaultChannelId = null;
     public static String defaultChannelName = null;
 
+    public static Uri channelSoundUri = null;
+
     private Map<String, AuthCredential> authCredentials = new HashMap<String, AuthCredential>();
     private Map<String, OAuthProvider> authProviders = new HashMap<String, OAuthProvider>();
 
@@ -239,6 +241,19 @@ public class FirebasePlugin extends CordovaPlugin {
                     }
                     defaultChannelId = getStringResource("default_notification_channel_id");
                     defaultChannelName = getStringResource("default_notification_channel_name");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        /*
+                            This adds the custom sound to the system and returns the Uri pointing to it.
+                            The sound will be shown in the listings when the user changes the notification sound via the system or via the ringtone picker intent.
+                            The returned Uri is different from the "raw" Uri reference and has two benefits when using it.
+                            1 - The sound title which has been set while registering the sound will be displayed in the system settings as the notification channel sound title. Instead of "app provided".
+                            2 - The ringtone picker will highlight the sound When opening the RingtoneManager picker via Intent(RingtoneManager.ACTION_RINGTONE_PICKER) and setting this Uri as EXTRA_RINGTONE_EXISTING_URI.
+                        */
+                        channelSoundUri = SoundManager.addSoundToSystem(applicationContext);
+                    } else {
+                        channelSoundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + R.raw.notification_sound);
+                    }
+                    
                     createDefaultChannel();
                 } catch (Exception e) {
                     handleExceptionWithoutContext(e);
@@ -2786,9 +2801,8 @@ public class FirebasePlugin extends CordovaPlugin {
                     channel.setSound(soundUri, audioAttributes);
                     Log.d(TAG, "Channel " + id + " - sound=" + sound);
                 } else {
-                    Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/notification_sound");
-                    channel.setSound(soundUri, audioAttributes);
-                    Log.d(TAG, "Channel " + id + " - sound=default (Klender ringtone)");
+                    channel.setSound(channelSoundUri, audioAttributes);
+                    Log.d(TAG, "Channel " + id + " - sound=default");
                 }
             } else {
                 channel.setSound(null, null);
