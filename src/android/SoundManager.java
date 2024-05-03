@@ -49,7 +49,12 @@ public class SoundManager {
         Uri newUri = context.getContentResolver().insert(contentUri, values);
 
         if (newUri != null) {
-            InputStream inputStream = context.getResources().openRawResource(R.raw.notification_sound);
+            // Get the resource identifier dynamically
+            int resourceId = context.getResources().getIdentifier("notification_sound", "raw", context.getPackageName());
+            if (resourceId == 0) {
+                throw new RuntimeException("Resource not found: " + resourceName);
+            }
+            InputStream inputStream = context.getResources().openRawResource(resourceId);
             OutputStream outputStream = context.getContentResolver().openOutputStream(newUri);
             byte[] buffer = new byte[4096];
             int read;
