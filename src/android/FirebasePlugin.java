@@ -251,7 +251,7 @@ public class FirebasePlugin extends CordovaPlugin {
                         */
                         channelSoundUri = SoundManager.addSoundToSystem(applicationContext);
                     } else {
-                        channelSoundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + R.raw.notification_sound);
+                        channelSoundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + applicationContext.getPackageName() + "/raw/notification_sound");
                     }
                     
                     createDefaultChannel();
