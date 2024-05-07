@@ -28,7 +28,7 @@ public class SoundManager {
         values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES);
         values.put(MediaStore.Audio.AudioColumns.IS_RINGTONE, false);
         values.put(MediaStore.Audio.AudioColumns.IS_NOTIFICATION, true);
-        values.put(MediaStore.Audio.AudioColumns.IS_ALARM, false);
+        values.put(MediaStore.Audio.AudioColumns.IS_ALARM, true);
         values.put(MediaStore.Audio.AudioColumns.IS_MUSIC, false);
 
         Uri contentUri = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
