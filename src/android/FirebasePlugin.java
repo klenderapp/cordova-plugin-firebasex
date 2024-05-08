@@ -241,6 +241,9 @@ public class FirebasePlugin extends CordovaPlugin {
                     }
                     defaultChannelId = getStringResource("default_notification_channel_id");
                     defaultChannelName = getStringResource("default_notification_channel_name");
+
+                    Log.d(TAG, "About to add the custom sound to the system");
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         /*
                             This adds the custom sound to the system and returns the Uri pointing to it.
@@ -253,6 +256,8 @@ public class FirebasePlugin extends CordovaPlugin {
                     } else {
                         channelSoundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + applicationContext.getPackageName() + "/raw/notification_sound");
                     }
+
+                    Log.d(TAG, "Added the custom sound to the system");
                     
                     createDefaultChannel();
                 } catch (Exception e) {
