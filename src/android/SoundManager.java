@@ -19,7 +19,7 @@ public class SoundManager {
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
     public static Uri addSoundToSystem(Context context) throws IOException {
-        String soundTitle = "Klender - tune";
+        String soundTitle = "Klender - Sound";
 
         ContentValues values = new ContentValues();
         values.put(MediaStore.MediaColumns.TITLE, soundTitle);
