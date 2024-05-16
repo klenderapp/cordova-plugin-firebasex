@@ -2780,7 +2780,7 @@ public class FirebasePlugin extends CordovaPlugin {
             Log.d(TAG, "Channel " + id + " - badge=" + badge);
             channel.setShowBadge(badge);
 
-            int usage = options.optInt("usage", AudioAttributes.USAGE_NOTIFICATION_RINGTONE);
+            int usage = options.optInt("usage", AudioAttributes.USAGE_NOTIFICATION);
             Log.d(TAG, "Channel " + id + " - usage=" + usage);
 
             int streamType = options.optInt("streamType", -1);
