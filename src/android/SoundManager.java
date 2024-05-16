@@ -25,7 +25,7 @@ public class SoundManager {
         values.put(MediaStore.MediaColumns.TITLE, soundTitle);
         values.put(MediaStore.MediaColumns.MIME_TYPE, "audio/mp3");
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, soundTitle);
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_RINGTONES);
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_NOTIFICATIONS);
         values.put(MediaStore.Audio.AudioColumns.IS_RINGTONE, false);
         values.put(MediaStore.Audio.AudioColumns.IS_NOTIFICATION, true);
         values.put(MediaStore.Audio.AudioColumns.IS_ALARM, true);
