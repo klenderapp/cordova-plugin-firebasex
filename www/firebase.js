@@ -158,6 +158,22 @@ exports.isAnalyticsCollectionEnabled = function (success, error) {
     exec(success, error, "FirebasePlugin", "isAnalyticsCollectionEnabled", []);
 };
 
+exports.AnalyticsConsentMode = {
+    ANALYTICS_STORAGE: "ANALYTICS_STORAGE",
+    AD_STORAGE: "AD_STORAGE",
+    AD_USER_DATA: "AD_USER_DATA",
+    AD_PERSONALIZATION: "AD_PERSONALIZATION"
+};
+
+exports.AnalyticsConsentStatus = {
+    GRANTED: "GRANTED",
+    DENIED: "DENIED"
+};
+
+exports.setAnalyticsConsentMode = function(consent, success, error) {
+    exec(success, error, "FirebasePlugin", "setAnalyticsConsentMode", [consent]);
+};
+
 exports.logEvent = function (name, params, success, error) {
   exec(success, error, "FirebasePlugin", "logEvent", [name, params]);
 };
@@ -369,7 +385,7 @@ exports.authenticateUserWithMicrosoft = function (success, error, locale) {
   exec(success, error, "FirebasePlugin", "authenticateUserWithMicrosoft", [locale]);
 };
 
-exports.authenticateUserWithFacebook = function (accessToken, success, error,) {
+exports.authenticateUserWithFacebook = function (accessToken, success, error) {
     exec(success, error, "FirebasePlugin", "authenticateUserWithFacebook", [accessToken]);
 };
 
@@ -391,6 +407,11 @@ exports.linkUserWithCredential = function (credential, success, error) {
 exports.reauthenticateWithCredential = function (credential, success, error) {
     if(typeof credential !== 'object') return error("'credential' must be an object");
     exec(success, handleAuthErrorResult(error), "FirebasePlugin", "reauthenticateWithCredential", [credential]);
+};
+
+exports.unlinkUserWithProvider = function (providerId, success, error) {
+    if(typeof providerId !== 'string') return error("'providerId' must be a string");
+    exec(success, handleAuthErrorResult(error), "FirebasePlugin", "unlinkUserWithProvider", [providerId]);
 };
 
 exports.isUserSignedIn = function (success, error) {

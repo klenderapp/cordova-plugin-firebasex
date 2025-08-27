@@ -7,6 +7,7 @@
 
 - (void)setAutoInitEnabled:(CDVInvokedUrlCommand*)command;
 - (void)isAutoInitEnabled:(CDVInvokedUrlCommand*)command;
+- (void)sendPendingNotifications;
 
 // Authentication
 - (void)verifyPhoneNumber:(CDVInvokedUrlCommand*)command;
@@ -23,6 +24,7 @@
 - (void)authenticateUserWithOAuth:(CDVInvokedUrlCommand*)command;
 - (void)signInWithCredential:(CDVInvokedUrlCommand*)command;
 - (void)linkUserWithCredential:(CDVInvokedUrlCommand*)command;
+- (void)unlinkUserWithProvider:(CDVInvokedUrlCommand*)command;
 - (void)reauthenticateWithCredential:(CDVInvokedUrlCommand*)command;
 - (void)isUserSignedIn:(CDVInvokedUrlCommand*)command;
 - (void)signOutUser:(CDVInvokedUrlCommand*)command;
@@ -69,6 +71,7 @@
 // Analytics
 - (void)setAnalyticsCollectionEnabled:(CDVInvokedUrlCommand*)command;
 - (void)isAnalyticsCollectionEnabled:(CDVInvokedUrlCommand*)command;
+- (void)setAnalyticsConsentMode:(CDVInvokedUrlCommand*)command;
 - (void)logEvent:(CDVInvokedUrlCommand*)command;
 - (void)setScreenName:(CDVInvokedUrlCommand*)command;
 - (void)setUserId:(CDVInvokedUrlCommand*)command;

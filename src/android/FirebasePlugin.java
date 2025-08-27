@@ -56,6 +56,8 @@ import com.google.android.gms.tasks.Task;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.Timestamp;
 import com.google.firebase.analytics.FirebaseAnalytics;
+import com.google.firebase.analytics.FirebaseAnalytics.ConsentType;
+import com.google.firebase.analytics.FirebaseAnalytics.ConsentStatus;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.OAuthCredential;
 import com.google.firebase.auth.AuthResult;
@@ -113,6 +115,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.List;
 import java.util.Date;
+import java.util.EnumMap;
 
 // Firebase PhoneAuth
 import java.util.concurrent.TimeUnit;
@@ -148,6 +151,8 @@ public class FirebasePlugin extends CordovaPlugin {
     private static CordovaInterface cordovaInterface = null;
     protected static Context applicationContext = null;
     private static Activity cordovaActivity = null;
+    private static boolean pluginInitialized = false;
+    private static ArrayList<String> pendingGlobalJS = null;
 
     protected static final String TAG = "FirebasePlugin";
     protected static final String JS_GLOBAL_NAMESPACE = "FirebasePlugin.";
@@ -157,10 +162,19 @@ public class FirebasePlugin extends CordovaPlugin {
     private static final String CRASHLYTICS_COLLECTION_ENABLED = "firebase_crashlytics_collection_enabled";
     private static final String ANALYTICS_COLLECTION_ENABLED = "firebase_analytics_collection_enabled";
     private static final String PERFORMANCE_COLLECTION_ENABLED = "firebase_performance_collection_enabled";
+
+    private static final String GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED = "google_analytics_adid_collection_enabled";
+    private static final String GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE = "google_analytics_default_allow_analytics_storage";
+    private static final String GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE = "firebase_performance_collectigoogle_analytics_default_allow_ad_storageon_enabled";
+    private static final String GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_USER_DATA = "google_analytics_default_allow_ad_user_data";
+    private static final String GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS = "google_analytics_default_allow_ad_personalization_signals";
+
+
     protected static final String POST_NOTIFICATIONS = "POST_NOTIFICATIONS";
     protected static final int POST_NOTIFICATIONS_PERMISSION_REQUEST_ID = 1;
 
     private static boolean inBackground = true;
+    private static boolean immediateMessagePayloadDelivery = false;
     private static ArrayList<Bundle> notificationStack = null;
     private static CallbackContext notificationCallbackContext;
     private static CallbackContext tokenRefreshCallbackContext;
@@ -204,6 +218,28 @@ public class FirebasePlugin extends CordovaPlugin {
                         setPreference(PERFORMANCE_COLLECTION_ENABLED, true);
                     }
 
+                    if (getMetaDataFromManifest(GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED)) {
+                        setPreference(GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED, true);
+                    }
+
+                    if (getMetaDataFromManifest(GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE)) {
+                        setPreference(GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE, true);
+                    }
+
+                    if (getMetaDataFromManifest(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE)) {
+                        setPreference(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE, true);
+                    }
+
+                    if (getMetaDataFromManifest(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_USER_DATA)) {
+                        setPreference(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_USER_DATA, true);
+                    }
+
+                    if (getMetaDataFromManifest(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS)) {
+                        setPreference(GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS, true);
+                    }
+
+                    immediateMessagePayloadDelivery = getPluginVariableFromConfigXml("FIREBASE_MESSAGING_IMMEDIATE_PAYLOAD_DELIVERY").equals("true");
+
                     FirebaseApp.initializeApp(applicationContext);
                     mFirebaseAnalytics = FirebaseAnalytics.getInstance(applicationContext);
 
@@ -240,6 +276,8 @@ public class FirebasePlugin extends CordovaPlugin {
                     defaultChannelId = getStringResource("default_notification_channel_id");
                     defaultChannelName = getStringResource("default_notification_channel_name");
                     createDefaultChannel();
+                    pluginInitialized = true;                   
+
                 } catch (Exception e) {
                     handleExceptionWithoutContext(e);
                 }
@@ -248,205 +286,312 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     @Override
+    public Object onMessage(String id, Object data){
+        if (id == null) {
+            return super.onMessage(id, data);
+        }
+        if("onPageFinished".equals(id)){       
+            Log.d(TAG, "Page ready init javascript");
+            executePendingGlobalJavascript();
+            return null;
+        }
+        return super.onMessage(id, data);
+    }
+
+    @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         try {
-            if (action.equals("getId")) {
-                this.getInstallationId(args, callbackContext);
-            } else if (action.equals("getToken")) {
-                this.getToken(args, callbackContext);
-            } else if (action.equals("hasPermission")) {
-                this.hasPermission(callbackContext);
-            } else if (action.equals("grantPermission")) {
-                this.grantPermission(callbackContext);
-            } else if (action.equals("subscribe")) {
-                this.subscribe(callbackContext, args.getString(0));
-            } else if (action.equals("unsubscribe")) {
-                this.unsubscribe(callbackContext, args.getString(0));
-            } else if (action.equals("isAutoInitEnabled")) {
-                isAutoInitEnabled(callbackContext);
-            } else if (action.equals("setAutoInitEnabled")) {
-                setAutoInitEnabled(callbackContext, args.getBoolean(0));
-            } else if (action.equals("unregister")) {
-                this.unregister(callbackContext);
-            } else if (action.equals("onMessageReceived")) {
-                this.onMessageReceived(callbackContext);
-            } else if (action.equals("onTokenRefresh")) {
-                this.onTokenRefresh(callbackContext);
-            } else if (action.equals("logEvent")) {
-                this.logEvent(callbackContext, args.getString(0), args.getJSONObject(1));
-            } else if (action.equals("logError")) {
-                this.logError(callbackContext, args);
-            } else if (action.equals("setCrashlyticsUserId")) {
-                this.setCrashlyticsUserId(callbackContext, args.getString(0));
-            } else if (action.equals("setScreenName")) {
-                this.setScreenName(callbackContext, args.getString(0));
-            } else if (action.equals("setUserId")) {
-                this.setUserId(callbackContext, args.getString(0));
-            } else if (action.equals("setUserProperty")) {
-                this.setUserProperty(callbackContext, args.getString(0), args.getString(1));
-            } else if (action.equals("activateFetched")) {
-                this.activateFetched(callbackContext);
-            } else if (action.equals("fetchAndActivate")) {
-                this.fetchAndActivate(callbackContext);
-            } else if (action.equals("fetch")) {
-                if (args.length() > 0) {
-                    this.fetch(callbackContext, args.getLong(0));
-                } else {
-                    this.fetch(callbackContext);
-                }
-            } else if (action.equals("resetRemoteConfig")) {
-                this.resetRemoteConfig(callbackContext);
-            } else if (action.equals("getValue")) {
-                this.getValue(callbackContext, args.getString(0));
-            } else if (action.equals("getInfo")) {
-                this.getInfo(callbackContext);
-            } else if (action.equals("getAll")) {
-                this.getAll(callbackContext);
-            } else if (action.equals("didCrashOnPreviousExecution")) {
-                this.didCrashOnPreviousExecution(callbackContext);
-
-            } else if (action.equals("setConfigSettings")) {
-                this.setConfigSettings(callbackContext, args);
-
-            } else if (action.equals("setDefaults")) {
-                this.setDefaults(callbackContext, args.getJSONObject(0));
-
-            } else if (action.equals("verifyPhoneNumber")) {
-                this.verifyPhoneNumber(callbackContext, args);
-            } else if (action.equals("enrollSecondAuthFactor")) {
-                this.enrollSecondAuthFactor(callbackContext, args);
-            } else if (action.equals("verifySecondAuthFactor")) {
-                this.verifySecondAuthFactor(callbackContext, args);
-            } else if (action.equals("listEnrolledSecondAuthFactors")) {
-                this.listEnrolledSecondAuthFactors(callbackContext, args);
-            } else if (action.equals("unenrollSecondAuthFactor")) {
-                this.unenrollSecondAuthFactor(callbackContext, args);
-            } else if (action.equals("setLanguageCode")) {
-                this.setLanguageCode(callbackContext, args);
-            } else if (action.equals("authenticateUserWithGoogle")) {
-                this.authenticateUserWithGoogle(callbackContext, args);
-            } else if (action.equals("authenticateUserWithApple")) {
-                this.authenticateUserWithApple(callbackContext, args);
-            } else if (action.equals("authenticateUserWithMicrosoft")) {
-                this.authenticateUserWithMicrosoft(callbackContext, args);
-            } else if (action.equals("authenticateUserWithFacebook")) {
-                this.authenticateUserWithFacebook(callbackContext, args);
-            } else if (action.equals("authenticateUserWithOAuth")) {
-                this.authenticateUserWithOAuth(callbackContext, args);
-            } else if (action.equals("createUserWithEmailAndPassword")) {
-                this.createUserWithEmailAndPassword(callbackContext, args);
-            } else if (action.equals("signInUserWithEmailAndPassword")) {
-                this.signInUserWithEmailAndPassword(callbackContext, args);
-            } else if (action.equals("authenticateUserWithEmailAndPassword")) {
-                this.authenticateUserWithEmailAndPassword(callbackContext, args);
-            } else if (action.equals("signInUserWithCustomToken")) {
-                this.signInUserWithCustomToken(callbackContext, args);
-            } else if (action.equals("signInUserAnonymously")) {
-                this.signInUserAnonymously(callbackContext);
-            } else if (action.equals("signInWithCredential")) {
-                this.signInWithCredential(callbackContext, args);
-            } else if (action.equals("linkUserWithCredential")) {
-                this.linkUserWithCredential(callbackContext, args);
-            } else if (action.equals("reauthenticateWithCredential")) {
-                this.reauthenticateWithCredential(callbackContext, args);
-            } else if (action.equals("isUserSignedIn")) {
-                this.isUserSignedIn(callbackContext, args);
-            } else if (action.equals("signOutUser")) {
-                this.signOutUser(callbackContext, args);
-            } else if (action.equals("getCurrentUser")) {
-                this.getCurrentUser(callbackContext, args);
-            } else if (action.equals("reloadCurrentUser")) {
-                this.reloadCurrentUser(callbackContext, args);
-            } else if (action.equals("updateUserProfile")) {
-                this.updateUserProfile(callbackContext, args);
-            } else if (action.equals("updateUserEmail")) {
-                this.updateUserEmail(callbackContext, args);
-            } else if (action.equals("sendUserEmailVerification")) {
-                this.sendUserEmailVerification(callbackContext, args);
-            } else if (action.equals("verifyBeforeUpdateEmail")) {
-                this.verifyBeforeUpdateEmail(callbackContext, args);
-            } else if (action.equals("updateUserPassword")) {
-                this.updateUserPassword(callbackContext, args);
-            } else if (action.equals("sendUserPasswordResetEmail")) {
-                this.sendUserPasswordResetEmail(callbackContext, args);
-            } else if (action.equals("deleteUser")) {
-                this.deleteUser(callbackContext, args);
-            } else if (action.equals("useAuthEmulator")) {
-                this.useAuthEmulator(callbackContext, args);
-            } else if (action.equals("getClaims")) {
-                this.getClaims(callbackContext, args);
-            } else if (action.equals("startTrace")) {
-                this.startTrace(callbackContext, args.getString(0));
-            } else if (action.equals("incrementCounter")) {
-                this.incrementCounter(callbackContext, args.getString(0), args.getString(1));
-            } else if (action.equals("stopTrace")) {
-                this.stopTrace(callbackContext, args.getString(0));
-            } else if (action.equals("setAnalyticsCollectionEnabled")) {
-                this.setAnalyticsCollectionEnabled(callbackContext, args.getBoolean(0));
-            } else if (action.equals("isAnalyticsCollectionEnabled")) {
-                this.isAnalyticsCollectionEnabled(callbackContext);
-            } else if (action.equals("setPerformanceCollectionEnabled")) {
-                this.setPerformanceCollectionEnabled(callbackContext, args.getBoolean(0));
-            } else if (action.equals("isPerformanceCollectionEnabled")) {
-                this.isPerformanceCollectionEnabled(callbackContext);
-            } else if (action.equals("setCrashlyticsCollectionEnabled")) {
-                this.setCrashlyticsCollectionEnabled(callbackContext, args.getBoolean(0));
-            } else if (action.equals("isCrashlyticsCollectionEnabled")) {
-                this.isCrashlyticsCollectionEnabled(callbackContext);
-            } else if (action.equals("clearAllNotifications")) {
-                this.clearAllNotifications(callbackContext);
-            } else if (action.equals("setCrashlyticsCustomKey")) {
-                this.setCrashlyticsCustomKey(callbackContext, args);
-            } else if (action.equals("logMessage")) {
-                logMessage(args, callbackContext);
-            } else if (action.equals("sendCrash")) {
-                sendCrash(args, callbackContext);
-            } else if (action.equals("createChannel")) {
-                this.createChannel(callbackContext, args.getJSONObject(0));
-            } else if (action.equals("deleteChannel")) {
-                this.deleteChannel(callbackContext, args.getString(0));
-            } else if (action.equals("listChannels")) {
-                this.listChannels(callbackContext);
-            } else if (action.equals("setDefaultChannel")) {
-                this.setDefaultChannel(callbackContext, args.getJSONObject(0));
-            } else if (action.equals("addDocumentToFirestoreCollection")) {
-                this.addDocumentToFirestoreCollection(args, callbackContext);
-            } else if (action.equals("setDocumentInFirestoreCollection")) {
-                this.setDocumentInFirestoreCollection(args, callbackContext);
-            } else if (action.equals("updateDocumentInFirestoreCollection")) {
-                this.updateDocumentInFirestoreCollection(args, callbackContext);
-            } else if (action.equals("deleteDocumentFromFirestoreCollection")) {
-                this.deleteDocumentFromFirestoreCollection(args, callbackContext);
-            } else if (action.equals("documentExistsInFirestoreCollection")) {
-                this.documentExistsInFirestoreCollection(args, callbackContext);
-            } else if (action.equals("fetchDocumentInFirestoreCollection")) {
-                this.fetchDocumentInFirestoreCollection(args, callbackContext);
-            } else if (action.equals("fetchFirestoreCollection")) {
-                this.fetchFirestoreCollection(args, callbackContext);
-            } else if (action.equals("listenToDocumentInFirestoreCollection")) {
-                this.listenToDocumentInFirestoreCollection(args, callbackContext);
-            } else if (action.equals("listenToFirestoreCollection")) {
-                this.listenToFirestoreCollection(args, callbackContext);
-            } else if (action.equals("removeFirestoreListener")) {
-                this.removeFirestoreListener(args, callbackContext);
-            } else if (action.equals("functionsHttpsCallable")) {
-                this.functionsHttpsCallable(args, callbackContext);
-            } else if (action.equals("grantCriticalPermission")
-                    || action.equals("hasCriticalPermission")
-                    || action.equals("setBadgeNumber")
-                    || action.equals("getBadgeNumber")
-            ) {
-                // Stubs for other platform methods
-                callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, true));
-            } else if (action.equals("deleteInstallationId")) {
-                this.deleteInstallationId(args, callbackContext);
-            } else if (action.equals("getInstallationId")) {
-                this.getInstallationId(args, callbackContext);
-            } else if (action.equals("getInstallationToken")) {
-                this.getInstallationToken(args, callbackContext);
-            } else {
-                callbackContext.error("Invalid action: " + action);
-                return false;
+            switch (action) {
+                case "getId":
+                    this.getInstallationId(args, callbackContext);
+                    break;
+                case "getToken":
+                    this.getToken(args, callbackContext);
+                    break;
+                case "hasPermission":
+                    this.hasPermission(callbackContext);
+                    break;
+                case "grantPermission":
+                    this.grantPermission(callbackContext);
+                    break;
+                case "subscribe":
+                    this.subscribe(callbackContext, args.getString(0));
+                    break;
+                case "unsubscribe":
+                    this.unsubscribe(callbackContext, args.getString(0));
+                    break;
+                case "isAutoInitEnabled":
+                    this.isAutoInitEnabled(callbackContext);
+                    break;
+                case "setAutoInitEnabled":
+                    this.setAutoInitEnabled(callbackContext, args.getBoolean(0));
+                    break;
+                case "unregister":
+                    this.unregister(callbackContext);
+                    break;
+                case "onMessageReceived":
+                    this.onMessageReceived(callbackContext);
+                    break;
+                case "onTokenRefresh":
+                    this.onTokenRefresh(callbackContext);
+                    break;
+                case "logEvent":
+                    this.logEvent(callbackContext, args.getString(0), args.getJSONObject(1));
+                    break;
+                case "logError":
+                    this.logError(callbackContext, args);
+                    break;
+                case "setCrashlyticsUserId":
+                    this.setCrashlyticsUserId(callbackContext, args.getString(0));
+                    break;
+                case "setScreenName":
+                    this.setScreenName(callbackContext, args.getString(0));
+                    break;
+                case "setUserId":
+                    this.setUserId(callbackContext, args.getString(0));
+                    break;
+                case "setUserProperty":
+                    this.setUserProperty(callbackContext, args.getString(0), args.getString(1));
+                    break;
+                case "activateFetched":
+                    this.activateFetched(callbackContext);
+                    break;
+                case "fetchAndActivate":
+                    this.fetchAndActivate(callbackContext);
+                    break;
+                case "fetch":
+                    if (args.length() > 0) {
+                        this.fetch(callbackContext, args.getLong(0));
+                    } else {
+                        this.fetch(callbackContext);
+                    }
+                    break;
+                case "resetRemoteConfig":
+                    this.resetRemoteConfig(callbackContext);
+                    break;
+                case "getValue":
+                    this.getValue(callbackContext, args.getString(0));
+                    break;
+                case "getInfo":
+                    this.getInfo(callbackContext);
+                    break;
+                case "getAll":
+                    this.getAll(callbackContext);
+                    break;
+                case "didCrashOnPreviousExecution":
+                    this.didCrashOnPreviousExecution(callbackContext);
+                    break;
+                case "setConfigSettings":
+                    this.setConfigSettings(callbackContext, args);
+                    break;
+                case "setDefaults":
+                    this.setDefaults(callbackContext, args.getJSONObject(0));
+                    break;
+                case "verifyPhoneNumber":
+                    this.verifyPhoneNumber(callbackContext, args);
+                    break;
+                case "enrollSecondAuthFactor":
+                    this.enrollSecondAuthFactor(callbackContext, args);
+                    break;
+                case "verifySecondAuthFactor":
+                    this.verifySecondAuthFactor(callbackContext, args);
+                    break;
+                case "listEnrolledSecondAuthFactors":
+                    this.listEnrolledSecondAuthFactors(callbackContext, args);
+                    break;
+                case "unenrollSecondAuthFactor":
+                    this.unenrollSecondAuthFactor(callbackContext, args);
+                    break;
+                case "setLanguageCode":
+                    this.setLanguageCode(callbackContext, args);
+                    break;
+                case "authenticateUserWithGoogle":
+                    this.authenticateUserWithGoogle(callbackContext, args);
+                    break;
+                case "authenticateUserWithApple":
+                    this.authenticateUserWithApple(callbackContext, args);
+                    break;
+                case "authenticateUserWithMicrosoft":
+                    this.authenticateUserWithMicrosoft(callbackContext, args);
+                    break;
+                case "authenticateUserWithFacebook":
+                    this.authenticateUserWithFacebook(callbackContext, args);
+                    break;
+                case "authenticateUserWithOAuth":
+                    this.authenticateUserWithOAuth(callbackContext, args);
+                    break;
+                case "createUserWithEmailAndPassword":
+                    this.createUserWithEmailAndPassword(callbackContext, args);
+                    break;
+                case "signInUserWithEmailAndPassword":
+                    this.signInUserWithEmailAndPassword(callbackContext, args);
+                    break;
+                case "authenticateUserWithEmailAndPassword":
+                    this.authenticateUserWithEmailAndPassword(callbackContext, args);
+                    break;
+                case "signInUserWithCustomToken":
+                    this.signInUserWithCustomToken(callbackContext, args);
+                    break;
+                case "signInUserAnonymously":
+                    this.signInUserAnonymously(callbackContext);
+                    break;
+                case "signInWithCredential":
+                    this.signInWithCredential(callbackContext, args);
+                    break;
+                case "linkUserWithCredential":
+                    this.linkUserWithCredential(callbackContext, args);
+                    break;
+                case "unlinkUserWithProvider":
+                    this.unlinkUserWithProvider(callbackContext, args);
+                    break;
+                case "reauthenticateWithCredential":
+                    this.reauthenticateWithCredential(callbackContext, args);
+                    break;
+                case "isUserSignedIn":
+                    this.isUserSignedIn(callbackContext, args);
+                    break;
+                case "signOutUser":
+                    this.signOutUser(callbackContext, args);
+                    break;
+                case "getCurrentUser":
+                    this.getCurrentUser(callbackContext, args);
+                    break;
+                case "reloadCurrentUser":
+                    this.reloadCurrentUser(callbackContext, args);
+                    break;
+                case "updateUserProfile":
+                    this.updateUserProfile(callbackContext, args);
+                    break;
+                case "updateUserEmail":
+                    this.updateUserEmail(callbackContext, args);
+                    break;
+                case "sendUserEmailVerification":
+                    this.sendUserEmailVerification(callbackContext, args);
+                    break;
+                case "verifyBeforeUpdateEmail":
+                    this.verifyBeforeUpdateEmail(callbackContext, args);
+                    break;
+                case "updateUserPassword":
+                    this.updateUserPassword(callbackContext, args);
+                    break;
+                case "sendUserPasswordResetEmail":
+                    this.sendUserPasswordResetEmail(callbackContext, args);
+                    break;
+                case "deleteUser":
+                    this.deleteUser(callbackContext, args);
+                    break;
+                case "useAuthEmulator":
+                    this.useAuthEmulator(callbackContext, args);
+                    break;
+                case "getClaims":
+                    this.getClaims(callbackContext, args);
+                    break;
+                case "startTrace":
+                    this.startTrace(callbackContext, args.getString(0));
+                    break;
+                case "incrementCounter":
+                    this.incrementCounter(callbackContext, args.getString(0), args.getString(1));
+                    break;
+                case "stopTrace":
+                    this.stopTrace(callbackContext, args.getString(0));
+                    break;
+                case "setAnalyticsCollectionEnabled":
+                    this.setAnalyticsCollectionEnabled(callbackContext, args.getBoolean(0));
+                    break;
+                case "isAnalyticsCollectionEnabled":
+                    this.isAnalyticsCollectionEnabled(callbackContext);
+                    break;
+                case "setPerformanceCollectionEnabled":
+                    this.setPerformanceCollectionEnabled(callbackContext, args.getBoolean(0));
+                    break;
+                case "isPerformanceCollectionEnabled":
+                    this.isPerformanceCollectionEnabled(callbackContext);
+                    break;
+                case "setCrashlyticsCollectionEnabled":
+                    this.setCrashlyticsCollectionEnabled(callbackContext, args.getBoolean(0));
+                    break;
+                case "isCrashlyticsCollectionEnabled":
+                    this.isCrashlyticsCollectionEnabled(callbackContext);
+                    break;
+                case "setAnalyticsConsentMode":
+                    this.setAnalyticsConsentMode(callbackContext, args.getJSONObject(0));
+                    break;
+                case "clearAllNotifications":
+                    this.clearAllNotifications(callbackContext);
+                    break;
+                case "setCrashlyticsCustomKey":
+                    this.setCrashlyticsCustomKey(callbackContext, args);
+                    break;
+                case "logMessage":
+                    logMessage(args, callbackContext);
+                    break;
+                case "sendCrash":
+                    sendCrash(args, callbackContext);
+                    break;
+                case "createChannel":
+                    this.createChannel(callbackContext, args.getJSONObject(0));
+                    break;
+                case "deleteChannel":
+                    this.deleteChannel(callbackContext, args.getString(0));
+                    break;
+                case "listChannels":
+                    this.listChannels(callbackContext);
+                    break;
+                case "setDefaultChannel":
+                    this.setDefaultChannel(callbackContext, args.getJSONObject(0));
+                    break;
+                case "addDocumentToFirestoreCollection":
+                    this.addDocumentToFirestoreCollection(args, callbackContext);
+                    break;
+                case "setDocumentInFirestoreCollection":
+                    this.setDocumentInFirestoreCollection(args, callbackContext);
+                    break;
+                case "updateDocumentInFirestoreCollection":
+                    this.updateDocumentInFirestoreCollection(args, callbackContext);
+                    break;
+                case "deleteDocumentFromFirestoreCollection":
+                    this.deleteDocumentFromFirestoreCollection(args, callbackContext);
+                    break;
+                case "documentExistsInFirestoreCollection":
+                    this.documentExistsInFirestoreCollection(args, callbackContext);
+                    break;
+                case "fetchDocumentInFirestoreCollection":
+                    this.fetchDocumentInFirestoreCollection(args, callbackContext);
+                    break;
+                case "fetchFirestoreCollection":
+                    this.fetchFirestoreCollection(args, callbackContext);
+                    break;
+                case "listenToDocumentInFirestoreCollection":
+                    this.listenToDocumentInFirestoreCollection(args, callbackContext);
+                    break;
+                case "listenToFirestoreCollection":
+                    this.listenToFirestoreCollection(args, callbackContext);
+                    break;
+                case "removeFirestoreListener":
+                    this.removeFirestoreListener(args, callbackContext);
+                    break;
+                case "functionsHttpsCallable":
+                    this.functionsHttpsCallable(args, callbackContext);
+                    break;
+                case "grantCriticalPermission":
+                case "hasCriticalPermission":
+                case "setBadgeNumber":
+                case "getBadgeNumber":
+                    // Stubs for other platform methods
+                    callbackContext.sendPluginResult(new PluginResult(PluginResult.Status.OK, true));
+                    break;
+                case "deleteInstallationId":
+                    this.deleteInstallationId(args, callbackContext);
+                    break;
+                case "getInstallationId":
+                    this.getInstallationId(args, callbackContext);
+                    break;
+                case "getInstallationToken":
+                    this.getInstallationToken(args, callbackContext);
+                    break;
+                default:
+                    callbackContext.error("Invalid action: " + action);
+                    return false;
             }
         } catch (Exception e) {
             handleExceptionWithContext(e, callbackContext);
@@ -463,6 +608,9 @@ public class FirebasePlugin extends CordovaPlugin {
     @Override
     public void onResume(boolean multitasking) {
         FirebasePlugin.inBackground = false;
+        if (FirebasePlugin.notificationCallbackContext != null) {
+            sendPendingNotifications();
+        }
     }
 
     @Override
@@ -480,6 +628,7 @@ public class FirebasePlugin extends CordovaPlugin {
         cordovaActivity = null;
         cordovaInterface = null;
         applicationContext = null;
+        onReset();
         super.onDestroy();
     }
 
@@ -533,11 +682,23 @@ public class FirebasePlugin extends CordovaPlugin {
 
     private void onMessageReceived(final CallbackContext callbackContext) {
         FirebasePlugin.notificationCallbackContext = callbackContext;
+        sendPendingNotifications();
+    }
+
+    private synchronized void sendPendingNotifications() {
         if (FirebasePlugin.notificationStack != null) {
-            for (Bundle bundle : FirebasePlugin.notificationStack) {
-                FirebasePlugin.sendMessage(bundle, applicationContext);
-            }
-            FirebasePlugin.notificationStack.clear();
+            this.cordova.getThreadPool().execute(new Runnable() {
+                public void run() {
+                    try {
+                        for (Bundle bundle : FirebasePlugin.notificationStack) {
+                            FirebasePlugin.sendMessage(bundle, applicationContext);
+                        }
+                        FirebasePlugin.notificationStack.clear();
+                    } catch (Exception e) {
+                        handleExceptionWithoutContext(e);
+                    }
+                }
+            });
         }
     }
 
@@ -576,7 +737,7 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     public static void sendMessage(Bundle bundle, Context context) {
-        if (!FirebasePlugin.hasNotificationsCallback()) {
+        if (!FirebasePlugin.hasNotificationsCallback() || (inBackground && !immediateMessagePayloadDelivery)) {
             String packageName = context.getPackageName();
             if (FirebasePlugin.notificationStack == null) {
                 FirebasePlugin.notificationStack = new ArrayList<Bundle>();
@@ -1553,6 +1714,25 @@ public class FirebasePlugin extends CordovaPlugin {
                     //ELSE
                     callbackContext.error("Specified native auth credential id does not exist");
 
+                } catch (Exception e) {
+                    handleExceptionWithContext(e, callbackContext);
+                }
+            }
+        });
+    }
+
+    public void unlinkUserWithProvider(final CallbackContext callbackContext, final JSONArray args){
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                    if(user == null){
+                        callbackContext.error("No user is currently signed in");
+                        return;
+                    }
+
+                    String providerId = args.getString(0);
+                    user.unlink(providerId).addOnCompleteListener(cordova.getActivity(), new AuthResultOnCompleteListener(callbackContext));
                 } catch (Exception e) {
                     handleExceptionWithContext(e, callbackContext);
                 }
@@ -2683,6 +2863,30 @@ public class FirebasePlugin extends CordovaPlugin {
         return getPreference(CRASHLYTICS_COLLECTION_ENABLED);
     }
 
+    private void setAnalyticsConsentMode(final CallbackContext callbackContext, final JSONObject consent) {
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    Map<ConsentType, ConsentStatus> consentMap = new EnumMap<>(ConsentType.class);
+                    Iterator<String> keys = consent.keys();
+
+                    while(keys.hasNext()) {
+                        String key = keys.next();
+                        ConsentType consentType = ConsentType.valueOf(key);
+                        ConsentStatus consentStatus = ConsentStatus.valueOf(consent.getString(key));
+                        consentMap.put(consentType, consentStatus);
+                    }
+
+                    mFirebaseAnalytics.setConsent(consentMap);
+                    callbackContext.success();
+                } catch (Exception e) {
+                    handleExceptionWithContext(e, callbackContext);
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
     public void clearAllNotifications(final CallbackContext callbackContext) {
         cordova.getThreadPool().execute(new Runnable() {
             public void run() {
@@ -3608,6 +3812,29 @@ public class FirebasePlugin extends CordovaPlugin {
     }
 
     private void executeGlobalJavascript(final String jsString) {
+        if(pluginInitialized){
+            doExecuteGlobalJavascript(jsString);
+        } else {
+            if(pendingGlobalJS == null) {
+                pendingGlobalJS = new ArrayList<>();
+            }
+            pendingGlobalJS.add(jsString);
+        }
+    }
+
+    private void executePendingGlobalJavascript() {
+        if(pendingGlobalJS == null){
+            Log.d(TAG, "No pending global JS calls");
+            return;
+        }
+        Log.d(TAG, "Executing "+pendingGlobalJS.size()+" pending global JS calls");
+        for(String jsString : pendingGlobalJS){
+            doExecuteGlobalJavascript(jsString);
+        }
+        pendingGlobalJS = null;
+    }
+
+    private void doExecuteGlobalJavascript(final String jsString) {
         if (cordovaActivity == null) return;
         cordovaActivity.runOnUiThread(new Runnable() {
             @Override
@@ -3636,6 +3863,16 @@ public class FirebasePlugin extends CordovaPlugin {
 
     private boolean getMetaDataFromManifest(String name) throws Exception {
         return applicationContext.getPackageManager().getApplicationInfo(applicationContext.getPackageName(), PackageManager.GET_META_DATA).metaData.getBoolean(name);
+    }
+
+    private String getPluginVariableFromConfigXml(String name) {
+        String value = null;
+        try {
+            value = preferences.getString(name, null);
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting "+name+" from config.xml", e);
+        }
+        return value;
     }
 
     private void setPreference(String name, boolean value) {

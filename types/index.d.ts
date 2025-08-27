@@ -119,6 +119,21 @@ export interface FirebasePlugin {
     setAnalyticsCollectionEnabled(
         setEnabled: boolean
     ): void
+    AnalyticsConsentMode: {
+        ANALYTICS_STORAGE: string,
+        AD_STORAGE: string,
+        AD_USER_DATA: string,
+        AD_PERSONALIZATION: string
+    }
+    AnalyticsConsentStatus: {
+        GRANTED: string,
+        DENIED: string
+    }
+    setAnalyticsConsentMode(
+        consent: object,
+        success: (info: object) => void,
+        error: (err: string) => void
+    ): void
     logEvent(
         eventName: string,
         eventProperties: object
@@ -284,6 +299,11 @@ export interface FirebasePlugin {
     ): void
     reauthenticateWithCredential(
         credential: object,
+        success?: () => void,
+        error?: (err: string) => void
+    ): void
+    unlinkUserWithProvider(
+        providerId: string,
         success?: () => void,
         error?: (err: string) => void
     ): void
