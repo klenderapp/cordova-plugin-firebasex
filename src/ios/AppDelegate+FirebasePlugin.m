@@ -3,6 +3,7 @@
 #import "FirebaseWrapper.h"
 #import <objc/runtime.h>
 
+#import "Klender-Swift.h"
 
 @import UserNotifications;
 @import FirebaseFirestore;
@@ -200,6 +201,7 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     @try{
         [[FIRMessaging messaging] appDidReceiveMessage:userInfo];
         mutableUserInfo = [userInfo mutableCopy];
+        [self handleAppointmentFromPayload:mutableUserInfo];
         NSDictionary* aps = [mutableUserInfo objectForKey:@"aps"];
         bool isContentAvailable = false;
         if([aps objectForKey:@"alert"] != nil){
@@ -232,6 +234,115 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
     }@catch (NSException *exception) {
         [FirebasePlugin.firebasePlugin handlePluginExceptionWithoutContext:exception];
     }
+}
+
+
+- (void)handleAppointmentFromPayload:(NSDictionary *)userInfo {
+    id appointmentString = [userInfo objectForKey:@"appointment"];
+    if (appointmentString && [appointmentString isKindOfClass:[NSString class]]) {
+        NSLog(@"appointments: %@", appointmentString);
+        NSData *data = [appointmentString dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *jsonError = nil;
+        NSDictionary *appointment = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonError];
+    
+        if (jsonError || ![appointment isKindOfClass:[NSDictionary class]]) {
+            NSLog(@"Failed to parse appointment JSON: %@", jsonError.localizedDescription);
+            return;
+        }
+        
+        NSString *eventId = appointment[@"id"];
+        if (!eventId) return;
+        
+        NSUserDefaults *defaults = [[NSUserDefaults alloc] initWithSuiteName:@"group.nl.klender.shareextension"];
+        NSString *storedJson = [[defaults stringForKey:@"events"] mutableCopy];
+        NSMutableArray *storedEvents = [NSMutableArray array];
+        
+        if (storedJson) {
+            NSData *storedData = [storedJson dataUsingEncoding:NSUTF8StringEncoding];
+            NSArray *parsedEvents = [NSJSONSerialization JSONObjectWithData:storedData options:0 error:&jsonError];
+            if (!jsonError && [parsedEvents isKindOfClass:[NSArray class]]) {
+                storedEvents = [parsedEvents mutableCopy];
+            }
+        }
+        
+        NSLog(@"appointments stored: %lu", (unsigned long)storedEvents.count);
+        
+        if (appointment[@"isNew"]) {
+            // Check if event is within next 2 days
+            NSString *startStr = appointment[@"start"];
+            NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+            formatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss";
+            NSDate *startDate = [formatter dateFromString:startStr];
+            NSDate *now = [NSDate date];
+            NSDate *twoDaysFromNow = [now dateByAddingTimeInterval:2 * 24 * 60 * 60];
+
+            if (startDate && [startDate compare:now] == NSOrderedDescending && [startDate compare:twoDaysFromNow] == NSOrderedAscending) {
+                // Add if not already present
+                BOOL exists = NO;
+                for (NSDictionary *event in storedEvents) {
+                    if ([event[@"id"] isEqualToString:eventId]) {
+                        exists = YES;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    [storedEvents addObject:appointment];
+                }
+            }
+        } else if (appointment[@"deleted"]) {
+            // Remove event
+            NSPredicate *predicate = [NSPredicate predicateWithFormat:@"id != %@", eventId];
+            NSArray *filtered = [storedEvents filteredArrayUsingPredicate:predicate];
+            storedEvents = [filtered mutableCopy];
+        } else {
+            // Update existing or add if not present
+            BOOL updated = NO;
+            for (NSInteger i = 0; i < storedEvents.count; i++) {
+                NSDictionary *existing = storedEvents[i];
+                if ([existing[@"id"] isEqualToString:eventId]) {
+                    NSMutableDictionary *updatedEvent = [existing mutableCopy];
+
+                    // Update only required fields
+                    if (appointment[@"summary"]) {
+                        updatedEvent[@"summary"] = appointment[@"summary"];
+                    }
+                    if (appointment[@"start"]) {
+                        updatedEvent[@"start"] = appointment[@"start"];
+                    }
+                    if (appointment[@"end"]) {
+                        updatedEvent[@"end"] = appointment[@"end"];
+                    }
+                    if (appointment[@"rrule"]) {
+                        updatedEvent[@"rrule"] = appointment[@"rrule"];
+                    }
+                    if (appointment[@"exdates"]) {
+                        updatedEvent[@"exdates"] = appointment[@"exdates"];
+                    }
+
+
+                    storedEvents[i] = updatedEvent;
+                    updated = YES;
+                    break;
+                }
+            }
+            if (!updated) {
+                [storedEvents addObject:appointment];
+            }
+        }
+
+        NSLog(@"appointments stored: %lu", (unsigned long)storedEvents.count);
+        // Serialize back to string and store
+        NSData *updatedData = [NSJSONSerialization dataWithJSONObject:storedEvents options:0 error:&jsonError];
+        if (!jsonError && updatedData) {
+            NSString *updatedJsonStr = [[NSString alloc] initWithData:updatedData encoding:NSUTF8StringEncoding];
+            NSLog(@"appointments stored json: %@", updatedJsonStr);
+            [defaults setObject:updatedJsonStr forKey:@"events"];
+            [defaults synchronize];
+        } else {
+            NSLog(@"Failed to serialize updated appointments: %@", jsonError.localizedDescription);
+        }
+    }
+    [WidgetRefresher reloadSpecificWidgetWithKind:@"WidgetExt"];
 }
 
 // Scans a message for keys which indicate a notification should be shown.
@@ -448,9 +559,9 @@ static __weak id <UNUserNotificationCenterDelegate> _prevUserNotificationCenterD
             if (_prevUserNotificationCenterDelegate) {
                 // bubbling event
                 [_prevUserNotificationCenterDelegate
-                	userNotificationCenter:center
-                	didReceiveNotificationResponse:response
-                	withCompletionHandler:completionHandler
+                    userNotificationCenter:center
+                    didReceiveNotificationResponse:response
+                    withCompletionHandler:completionHandler
                 ];
                 return;
             } else {
